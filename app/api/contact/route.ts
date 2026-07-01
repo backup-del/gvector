@@ -6,16 +6,17 @@ import { getAdminEmailHTML, getClientReceiptHTML } from '@/lib/email-templates';
 // Global connection state for serverless environments
 let isConnected = false;
 const connectDB = async () => {
-  if (isConnected) return;
+  if (isConnected) return true;
   if (!process.env.MONGODB_URI) {
-    console.error("Error: MONGODB_URI environment variable is not defined.");
-    throw new Error("MONGODB_URI is missing");
+    console.warn("Warning: MONGODB_URI environment variable is not defined. Running in local mock mode.");
+    return false;
   }
   
   try {
     await mongoose.connect(process.env.MONGODB_URI);
     isConnected = true;
     console.log("MongoDB connected successfully");
+    return true;
   } catch (error) {
     console.error("MongoDB connection error:", error);
     throw error;
@@ -38,7 +39,7 @@ const Contact = mongoose.models.Contact || mongoose.model('Contact', contactSche
 
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
+    const dbConnected = await connectDB();
     
     const body = await request.json();
     const { name, company, email, phone, interest, message, isRobotVerified } = body;
@@ -58,8 +59,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const newContact = new Contact({ name, company, email, phone, interest, message });
-    await newContact.save();
+    if (dbConnected) {
+      const newContact = new Contact({ name, company, email, phone, interest, message });
+      await newContact.save();
+    } else {
+      console.log("[MOCK SAVE] Local submission (No Database):", { name, company, email, phone, interest, message });
+    }
 
     // -----------------------------------------------------------
     // NODEMAILER: Email Notifications
